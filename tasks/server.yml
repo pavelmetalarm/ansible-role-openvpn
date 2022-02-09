@@ -65,6 +65,26 @@
     - private/client.key
     - private/server.key
 
+
+- name: ensure /etc/openvpn/client-configs/keys exists
+  ansible.builtin.file:
+    path: /etc/openvpn/client-configs/keys 
+    state: directory
+    mode: "0755"
+
+
+- name: copy client's certificate and key  to /etc/openvpn/client-configs/keys
+  ansible.builtin.copy:
+    src: /etc/openvpn/easy-rsa/pki/{{ item }}
+    dest: /etc/openvpn/client-configs/keys/{{ item | basename }}
+    mode: "0640"
+    remote_src: yes
+  loop:
+    - issued/client.crt
+    - private/client.key
+    - ca.crt
+    - ta.key
+
 - name: copy files to /etc/openvpn
   ansible.builtin.copy:
     src: /etc/openvpn/easy-rsa/pki/{{ item }}
@@ -75,6 +95,76 @@
     - ca.crt
     - ta.key
 
+
+
+      ############################################
+      #Here are all networking and firewall tasks:
+
+# Set ip forwarding on in /proc and verify token value with the sysctl command
+- name: sysctl ip forward ON
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: yes
+
+- name: enable UFW
+  community.general.ufw:
+    state: enabled
+
+
+- name: 
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+
+- name: set ufw default forward policy to allow
+  lineinfile:
+    dest=/etc/default/ufw
+    regexp='^DEFAULT_FORWARD_POLICY='
+    line='DEFAULT_FORWARD_POLICY="ACCEPT"'
+    state=present
+  notify:
+    - restart ufw
+
+
+
+
+- name: Allow all access to openvpn  tcp port 
+  community.general.ufw:
+    rule: allow
+    port: "{{ openvpn_server_port }}"
+    proto: tcp
+
+
+    # Can be used to further restrict a global FORWARD policy set to allow
+- name: Allow forwarded/routed traffic # from subnet 1.2.3.0/24 to subnet 4.5.6.0/24
+  community.general.ufw:
+    rule: allow
+    route: yes
+    src: any #1.2.3.0/24
+    dest: any # 4.5.6.0/24
+
+
+- name: place before.rules
+  ansible.builtin.template:
+    src: before.rules.j2
+    dest: /etc/ufw/before.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify:
+    - restart ufw
+
+
+
+      #################
+      
+      
+      
+      
+      
+
 - name: place server.conf
   ansible.builtin.template:
     src: server.conf.j2
@@ -84,3 +174,51 @@
     mode: "0640"
   notify:
     - restart openvpn
+
+- name: create client-configs dir etc.
+  ansible.builtin.file:
+    path: /etc/openvpn/client-configs/files
+    state: directory      
+    owner: root
+    
+- name: create client-configs dir etc.
+  ansible.builtin.file:
+    path: /etc/openvpn/client-configs/keys
+    state: directory      
+    owner: root
+    mode: "0755"
+
+- name: put make_config.sh & base.conf in /etc.../client-configs 
+  ansible.builtin.copy:
+    src: make_config.sh 
+    dest: /etc/openvpn/client-configs/make_config.sh 
+    owner: root
+    group: root
+    mode: '0755'
+
+
+
+
+- name: place base.conf
+  ansible.builtin.template:
+    src: base.conf.j2
+    dest: "{{ openvpn_configuration_directory }}/client-configs/base.conf"
+    owner: root
+    group: "{{ openvpn_group }}"
+    mode: "0640"
+ 
+- name: generate client's config by executing make_config.sh
+  ansible.builtin.shell: /etc/openvpn/client-configs/make_config.sh client 
+  args:
+          #    chdir: "{{ openvpn_configuration_directory }}/client-configs/"
+    #    executable: /bin/bash
+
+
+
+
+- name: ansible copy file from remote( openvpn server) to local.(ansible runner)
+  fetch:
+    src: "{{ openvpn_configuration_directory }}/client-configs/files/client.ovpn"
+    dest: /tmp/ 
+    flat: yes
+

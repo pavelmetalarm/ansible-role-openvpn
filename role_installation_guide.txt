@@ -1,0 +1,4 @@
+ansible-galaxy install robertdebock.openvpn
+
+
+python3 -m pip  install -r  $(pwd)/roles/robertdebock.openvpn/requirements.txt

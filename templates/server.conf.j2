@@ -1,26 +1,48 @@
 {{ ansible_managed | comment }}
-
-port 1194
-proto udp
+ 
+;local a.b.c.d
+port  {{ openvpn_server_port }}
+proto {{ openvpn_server_proto }}
+;dev tap
 dev tun
-ca /etc/openvpn/server/ca.crt
-cert /etc/openvpn/server/server.crt
-key /etc/openvpn/server/server.key
-dh /etc/openvpn/server/dh.pem
-topology subnet
+;dev-node MyTap
+ca ca.crt
+cert ./server/server.crt 
+key ./server/server.key  # This file should be kept secret
+dh none
+;topology subnet
 server 10.8.0.0 255.255.255.0
-ifconfig-pool-persist ipp.txt
+ifconfig-pool-persist /var/log/openvpn/ipp.txt
+;server-bridge 10.8.0.4 255.255.255.0 10.8.0.50 10.8.0.100
+;server-bridge
+;push "route 192.168.10.0 255.255.255.0"
+;push "route 192.168.20.0 255.255.255.0"
+;client-config-dir ccd
+;route 192.168.40.128 255.255.255.248
+;client-config-dir ccd
+;route 10.9.0.0 255.255.255.252
+;learn-address ./script
 push "redirect-gateway def1 bypass-dhcp"
-push "dhcp-option DNS 1.1.1.1"
-push "dhcp-option DNS 1.0.0.1"
+push "dhcp-option DNS 208.67.222.222"
+push "dhcp-option DNS 208.67.220.220"
+client-to-client
+;duplicate-cn
 keepalive 10 120
-# tls-crypt /etc/openvpn/server/myvpn.tlsauth 0
-cipher AES-256-CBC
+tls-crypt ta.key
+auth SHA256
+cipher AES-256-GCM
+;compress lz4-v2
+;push "compress lz4-v2"
+;comp-lzo
+;max-clients 100
 user nobody
-group {{ openvpn_group }}
+group nogroup
 persist-key
 persist-tun
-status openvpn-status.log
+status /var/log/openvpn/openvpn-status.log
+;log         /var/log/openvpn/openvpn.log
+;log-append  /var/log/openvpn/openvpn.log
 verb 3
-explicit-exit-notify 1
-remote-cert-eku "TLS Web Client Authentication"
+;mute 20
+explicit-exit-notify 0
+
